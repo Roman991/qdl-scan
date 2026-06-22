@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   pull_request:
 
+env:
+  PUBLISH_DIR: NewScan/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/publish
+
 jobs:
   build:
     runs-on: windows-latest
@@ -29,8 +32,65 @@ jobs:
       - name: Publish (self-contained x64)
         run: dotnet publish NewScan/NewScan.csproj -c Release -r win-x64 --self-contained -p:Platform=x64
 
-      - name: Upload build artifact
+      - name: Upload publish output
         uses: actions/upload-artifact@v4
         with:
-          name: NewScan-win-x64
-          path: NewScan/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/publish/
+          name: publish-win-x64
+          path: ${{ env.PUBLISH_DIR }}/
+
+  release:
+    needs: build
+    # Solo sui push a main (mai sulle PR), e solo se build+test sono passati.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download publish output
+        uses: actions/download-artifact@v4
+        with:
+          name: publish-win-x64
+          # Ripristina nella stessa cartella che setup.iss si aspetta (PublishDir).
+          path: ${{ env.PUBLISH_DIR }}
+
+      - name: Compute version
+        id: ver
+        shell: pwsh
+        run: |
+          [xml]$proj = Get-Content NewScan/NewScan.csproj
+          $v = ($proj.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+          if (-not $v) { $v = '0.0.0' }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          # Tag unico ad ogni push grazie al numero di run.
+          "tag=v$v-build.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer (ScanAppSetup.exe)
+        shell: pwsh
+        working-directory: installer
+        run: & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" setup.iss
+
+      - name: Package portable zip
+        shell: pwsh
+        run: Compress-Archive -Path "${{ env.PUBLISH_DIR }}/*" -DestinationPath "ScanApp-portable-win-x64.zip" -Force
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Scan App ${{ steps.ver.outputs.version }} (build ${{ github.run_number }})
+          body: |
+            Build automatica da `${{ github.sha }}`.
+
+            - `ScanAppSetup.exe` — installer (self-contained, nessun prerequisito runtime).
+            - `ScanApp-portable-win-x64.zip` — versione portable (scompatta ed esegui `NewScan.exe`).
+          files: |
+            installer/Output/ScanAppSetup.exe
+            ScanApp-portable-win-x64.zip
+          fail_on_unmatched_files: true
