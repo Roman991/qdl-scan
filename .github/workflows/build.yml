@@ -74,7 +74,8 @@ jobs:
       - name: Build installer (ScanAppSetup.exe)
         shell: pwsh
         working-directory: installer
-        run: & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" setup.iss
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" setup.iss
 
       - name: Package portable zip
         shell: pwsh
