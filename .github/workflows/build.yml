@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore NewScan.sln
+
+      - name: Build
+        run: dotnet build NewScan.sln -c Release -p:Platform=x64 --no-restore
+
+      - name: Test
+        run: dotnet test tests/NewScan.Tests/NewScan.Tests.csproj -c Release
+
+      - name: Publish (self-contained x64)
+        run: dotnet publish NewScan/NewScan.csproj -c Release -r win-x64 --self-contained -p:Platform=x64
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NewScan-win-x64
+          path: NewScan/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/publish/

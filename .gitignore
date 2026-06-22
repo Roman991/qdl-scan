@@ -1,0 +1,22 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+*.user
+
+# NuGet
+packages/
+*.nupkg
+
+# Inno Setup output
+installer/Output/
+
+# Visual Studio
+.vs/
+*.suo
+*.cache
+
+# App runtime data
+uploads/

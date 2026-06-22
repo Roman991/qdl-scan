@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="description" content="ScanAppForWeb thumbnail example — preview and rotate scanned images.">
+	<title>ScanAppForWeb thumbnail example</title>
+	<style>
+		:root {
+			color-scheme: light dark;
+			--bg: #f5f6f8;
+			--surface: #ffffff;
+			--border: #e2e5ea;
+			--text: #1f2329;
+			--muted: #6b7280;
+			--primary: #2563eb;
+			--primary-hover: #1d4ed8;
+			--danger: #dc2626;
+			--radius: 12px;
+			--shadow: 0 1px 3px rgba(0, 0, 0, .08), 0 1px 2px rgba(0, 0, 0, .06);
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #16181d;
+				--surface: #1f2329;
+				--border: #2c313a;
+				--text: #e6e8eb;
+				--muted: #9aa3b2;
+				--shadow: 0 1px 3px rgba(0, 0, 0, .4);
+			}
+		}
+
+		* { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+			background: var(--bg);
+			color: var(--text);
+			line-height: 1.5;
+		}
+
+		.container {
+			max-width: 1100px;
+			margin-inline: auto;
+			padding-inline: 1rem;
+		}
+
+		h1 {
+			text-align: center;
+			font-weight: 300;
+			font-size: 1.6rem;
+			padding-block: 1.5rem;
+			margin: 0;
+		}
+
+		.panel {
+			background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+			padding-block: 2.5rem;
+		}
+
+		/* Toolbar */
+		.toolbar {
+			display: flex;
+			flex-wrap: wrap;
+			gap: .5rem;
+			align-items: center;
+			margin-top: 1.5rem;
+		}
+
+		.btn {
+			font: inherit;
+			font-weight: 500;
+			border: 0;
+			border-radius: 8px;
+			padding: .5rem 1.1rem;
+			color: #fff;
+			cursor: pointer;
+			transition: background-color .15s, opacity .15s;
+		}
+		.btn:disabled { opacity: .5; cursor: not-allowed; }
+		.btn-primary { background: var(--primary); }
+		.btn-primary:not(:disabled):hover { background: var(--primary-hover); }
+		.btn-danger  { background: var(--danger); }
+
+		.hint { color: var(--muted); margin-top: 1rem; }
+		.hint--error { color: var(--danger); }
+		[hidden] { display: none !important; }
+
+		/* Thumbnail grid */
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+			gap: 1rem;
+		}
+
+		.empty {
+			grid-column: 1 / -1;
+			color: var(--muted);
+			padding: 1rem 0;
+		}
+
+		.card {
+			position: relative;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--radius);
+			box-shadow: var(--shadow);
+			overflow: hidden;
+			text-align: center;
+		}
+
+		.card__img {
+			display: block;
+			width: 100%;
+			aspect-ratio: 1;
+			object-fit: contain;
+			background: var(--bg);
+		}
+
+		.card__caption {
+			padding: .6rem;
+			font-size: .9rem;
+			word-break: break-word;
+		}
+
+		.icon-btn {
+			position: absolute;
+			border: 0;
+			border-radius: 50%;
+			width: 2rem;
+			height: 2rem;
+			display: grid;
+			place-items: center;
+			cursor: pointer;
+			background: color-mix(in srgb, var(--surface) 80%, transparent);
+			color: var(--text);
+			backdrop-filter: blur(2px);
+			opacity: .85;
+			transition: opacity .15s, background-color .15s;
+		}
+		.icon-btn:hover { opacity: 1; }
+		.icon-btn svg { width: 1.1rem; height: 1.1rem; }
+
+		.card__rotate { top: .5rem; left: .5rem; }
+		.card__remove { top: .5rem; right: .5rem; color: var(--danger); font-size: 1.4rem; line-height: 1; }
+	</style>
+</head>
+<body>
+	<main>
+		<div class="container">
+			<h1>ScanAppForWeb thumbnail example</h1>
+		</div>
+
+		<div class="panel">
+			<div class="container">
+				<div class="grid" id="grid">
+					<div class="empty" id="empty">No scanned images</div>
+				</div>
+
+				<div class="toolbar">
+					<button class="btn btn-primary" id="btn-scan" type="button" disabled>Scan</button>
+					<button class="btn btn-danger"  id="btn-stop" type="button" disabled>Stop</button>
+				</div>
+
+				<p class="hint hint--error" id="download-app" hidden>
+					No Scan app found on your machine. Please
+					<a href="ScanAppSetup.exe" download>download</a>, install and open it,
+					then refresh the browser.
+				</p>
+				<p class="hint">
+					This example shows how to preview scanned images and rotate them if necessary.
+				</p>
+			</div>
+		</div>
+	</main>
+
+	<!-- Thumbnail template (cloned for every scanned page) -->
+	<template id="card-template">
+		<div class="card">
+			<img class="card__img" alt="">
+			<button class="icon-btn card__rotate" type="button" title="Rotate 90°" aria-label="Rotate">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M21 12a9 9 0 1 1-3-6.7"></path>
+					<path d="M21 3v5h-5"></path>
+				</svg>
+			</button>
+			<button class="icon-btn card__remove" type="button" title="Remove" aria-label="Remove">&times;</button>
+			<div class="card__caption"></div>
+		</div>
+	</template>
+
+	<script type="module">
+		'use strict';
+
+		// ── Config ──────────────────────────────────────────────────────────
+		const BRIDGE_URL = 'ws://127.0.0.1:8181/';   // desktop app, loopback only
+		const CMD_SCAN = '1100';
+		const CMD_STOP = '1101';
+		const MAX_SIZE = 3000;                         // longest edge, px
+		const JPEG_QUALITY = 0.9;
+		const RECONNECT_MS = 3000;
+
+		// ── DOM ─────────────────────────────────────────────────────────────
+		const grid        = document.getElementById('grid');
+		const empty        = document.getElementById('empty');
+		const btnScan      = document.getElementById('btn-scan');
+		const btnStop      = document.getElementById('btn-stop');
+		const downloadHint = document.getElementById('download-app');
+		const cardTemplate = document.getElementById('card-template');
+
+		let pageCount = 0;
+
+		// ── WebSocket bridge ────────────────────────────────────────────────
+		let ws = null;
+
+		function connect() {
+			ws = new WebSocket(BRIDGE_URL);
+			ws.binaryType = 'blob';
+
+			ws.addEventListener('open', () => {
+				btnScan.disabled = false;
+				btnStop.disabled = false;
+				downloadHint.hidden = true;
+			});
+
+			ws.addEventListener('message', (event) => {
+				if (typeof event.data === 'string') {
+					// Scanner status: BUSY = busy (block Scan), READY = free.
+					if (event.data === 'BUSY')  btnScan.disabled = true;
+					if (event.data === 'READY') btnScan.disabled = false;
+					return;
+				}
+				if (event.data instanceof Blob) addScannedPage(event.data);
+			});
+
+			const onDisconnected = () => {
+				btnScan.disabled = true;
+				btnStop.disabled = true;
+				downloadHint.hidden = false;
+				setTimeout(connect, RECONNECT_MS);   // app may start/restart later
+			};
+			ws.addEventListener('close', onDisconnected, { once: true });
+			ws.addEventListener('error', () => ws.close());
+		}
+
+		const isOpen = () => ws?.readyState === WebSocket.OPEN;
+
+		btnScan.addEventListener('click', () => { if (isOpen()) ws.send(CMD_SCAN); });
+		btnStop.addEventListener('click', () => { if (isOpen()) ws.send(CMD_STOP); });
+
+		// ── Image helpers (createImageBitmap + canvas) ──────────────────────
+		async function encodeBitmap(bitmap, width, height, draw) {
+			const canvas = document.createElement('canvas');
+			canvas.width = width;
+			canvas.height = height;
+			draw(canvas.getContext('2d'));
+			bitmap.close();
+			return canvas.convertToBlob
+				? canvas.convertToBlob({ type: 'image/jpeg', quality: JPEG_QUALITY })
+				: new Promise((res) => canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY));
+		}
+
+		// Downscale to fit MAX_SIZE while keeping aspect ratio.
+		async function normalize(blob) {
+			const bitmap = await createImageBitmap(blob);
+			const scale = Math.min(1, MAX_SIZE / bitmap.width, MAX_SIZE / bitmap.height);
+			const w = Math.round(bitmap.width * scale);
+			const h = Math.round(bitmap.height * scale);
+			return encodeBitmap(bitmap, w, h, (ctx) => ctx.drawImage(bitmap, 0, 0, w, h));
+		}
+
+		// Rotate 90° clockwise.
+		async function rotate(blob) {
+			const bitmap = await createImageBitmap(blob);
+			return encodeBitmap(bitmap, bitmap.height, bitmap.width, (ctx) => {
+				ctx.translate(bitmap.height, 0);
+				ctx.rotate(Math.PI / 2);
+				ctx.drawImage(bitmap, 0, 0);
+			});
+		}
+
+		// ── Thumbnails ──────────────────────────────────────────────────────
+		async function addScannedPage(rawBlob) {
+			empty.hidden = true;
+
+			const blob = await normalize(rawBlob);
+			const card = cardTemplate.content.firstElementChild.cloneNode(true);
+
+			const caption = card.querySelector('.card__caption');
+			caption.textContent = `Scan ${++pageCount}`;
+
+			setCardBlob(card, blob);
+
+			card.querySelector('.card__remove').addEventListener('click', () => {
+				releaseCardBlob(card);
+				card.remove();
+				if (!grid.querySelector('.card')) empty.hidden = false;
+			});
+
+			card.querySelector('.card__rotate').addEventListener('click', async (e) => {
+				const btn = e.currentTarget;
+				btn.disabled = true;
+				setCardBlob(card, await rotate(card._blob));
+				btn.disabled = false;
+			});
+
+			grid.append(card);
+		}
+
+		// Keep the working blob on the element and refresh its object-URL preview.
+		function setCardBlob(card, blob) {
+			releaseCardBlob(card);
+			card._blob = blob;
+			card._url = URL.createObjectURL(blob);
+			card.querySelector('.card__img').src = card._url;
+		}
+
+		function releaseCardBlob(card) {
+			if (card._url) URL.revokeObjectURL(card._url);
+		}
+
+		// ── Go ──────────────────────────────────────────────────────────────
+		connect();
+	</script>
+</body>
+</html>
