@@ -36,7 +36,7 @@ public static class AutostartService
 
         if (enabled)
         {
-            var exePath = Environment.ProcessPath;
+            var exePath = System.Windows.Forms.Application.ExecutablePath;
             if (!string.IsNullOrEmpty(exePath))
                 key.SetValue(ValueName, $"\"{exePath}\"");
         }

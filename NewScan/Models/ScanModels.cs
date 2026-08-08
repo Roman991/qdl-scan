@@ -24,7 +24,7 @@ public enum PaperSource
 /// <summary>Opzioni di scansione passate al WiaScannerService.</summary>
 public sealed class ScanOptions
 {
-    public required string DeviceId { get; init; }
+    public string DeviceId { get; init; } = string.Empty;
     public int Dpi { get; init; } = 300;
     public ColorMode ColorMode { get; init; } = ColorMode.Color;
     public PaperSource Source { get; init; } = PaperSource.Flatbed;
