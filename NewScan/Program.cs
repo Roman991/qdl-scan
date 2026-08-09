@@ -1,13 +1,28 @@
 using System;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace NewScan;
 
 internal static class Program
 {
+    private const string MutexName = "NewScan-ScanAppForWeb-SingleInstance-Mutex";
+
     [STAThread]
     private static void Main()
     {
+        using var mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
+
+        if (!createdNew)
+        {
+            MessageBox.Show(
+                "Scan App è già in esecuzione.",
+                "Scan App",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new MainForm());
