@@ -19,7 +19,7 @@
 #define PublishDir "..\NewScan\bin\Release\net48\publish"
 
 [Setup]
-AppId={#AppId}
+AppId={{#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
