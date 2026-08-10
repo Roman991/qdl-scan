@@ -330,22 +330,19 @@ public sealed class MainForm : Form
 
     // ---------------- combo statiche ----------------
 
+    private static readonly int[] FallbackDpis = { 100, 150, 200, 300, 600 };
+    private static readonly ColorMode[] FallbackColorModes =
+        { ColorMode.Color, ColorMode.Grayscale, ColorMode.BlackWhite };
+
     private void PopulateStaticOptions()
     {
         _scannerCombo.DataSource = _scanners;
         _scannerCombo.DisplayMember = nameof(ScannerInfo.Name);
 
-        _dpiCombo.Items.AddRange(new object[] { 100, 150, 200, 300, 600 });
-        int dpiIndex = _dpiCombo.Items.IndexOf(_settings.DefaultDpi);
-        _dpiCombo.SelectedIndex = dpiIndex >= 0 ? dpiIndex : 3;
-
-        _colorCombo.Items.AddRange(new object[]
-        {
-            new ColorOption(ColorMode.Color, "Colore"),
-            new ColorOption(ColorMode.Grayscale, "Scala di grigi"),
-            new ColorOption(ColorMode.BlackWhite, "Bianco e nero")
-        });
-        _colorCombo.SelectedIndex = (int)_settings.DefaultColorMode;
+        // Popolamento iniziale con un elenco "ragionevole": verrà sostituito dai
+        // valori realmente supportati non appena uno scanner viene selezionato
+        // (vedi ApplyCapabilities, chiamato da ScannerCombo_SelectionChanged).
+        ApplyCapabilities(null);
 
         _sourceCombo.Items.AddRange(new object[]
         {
@@ -369,6 +366,50 @@ public sealed class MainForm : Form
             _settings.DefaultColorMode = mode;
         _settings.Save();
     }
+
+    /// <summary>
+    /// Ripopola i combo DPI e colore con le capacità lette dal device (se note),
+    /// altrimenti con l'elenco fallback. Preserva la selezione corrente quando
+    /// il valore resta disponibile nel nuovo elenco, altrimenti ricade sul
+    /// default salvato nelle impostazioni.
+    /// </summary>
+    private void ApplyCapabilities(ScannerCapabilities? caps)
+    {
+        int? previousDpi = _dpiCombo.SelectedItem as int?;
+        IReadOnlyList<int> dpis = caps is not null && caps.Dpis.Count > 0 ? caps.Dpis : FallbackDpis;
+
+        _dpiCombo.Items.Clear();
+        _dpiCombo.Items.AddRange(dpis.Cast<object>().ToArray());
+        int dpiIndex = previousDpi.HasValue ? _dpiCombo.Items.IndexOf(previousDpi.Value) : -1;
+        if (dpiIndex < 0) dpiIndex = _dpiCombo.Items.IndexOf(_settings.DefaultDpi);
+        if (dpiIndex < 0 && _dpiCombo.Items.Count > 0) dpiIndex = _dpiCombo.Items.Count / 2;
+        if (_dpiCombo.Items.Count > 0) _dpiCombo.SelectedIndex = dpiIndex;
+
+        ColorMode? previousColor = (_colorCombo.SelectedItem as ColorOption)?.Value;
+        IReadOnlyList<ColorMode> colorModes =
+            caps is not null && caps.ColorModes.Count > 0 ? caps.ColorModes : FallbackColorModes;
+
+        _colorCombo.Items.Clear();
+        _colorCombo.Items.AddRange(colorModes.Select(m => new ColorOption(m, ColorModeLabel(m))).Cast<object>().ToArray());
+        int colorIndex = IndexOfColor(previousColor ?? _settings.DefaultColorMode);
+        if (colorIndex < 0 && _colorCombo.Items.Count > 0) colorIndex = 0;
+        if (_colorCombo.Items.Count > 0) _colorCombo.SelectedIndex = colorIndex;
+    }
+
+    private int IndexOfColor(ColorMode mode)
+    {
+        for (int i = 0; i < _colorCombo.Items.Count; i++)
+            if ((_colorCombo.Items[i] as ColorOption)?.Value == mode) return i;
+        return -1;
+    }
+
+    private static string ColorModeLabel(ColorMode mode) => mode switch
+    {
+        ColorMode.Color => "Colore",
+        ColorMode.Grayscale => "Scala di grigi",
+        ColorMode.BlackWhite => "Bianco e nero",
+        _ => mode.ToString()
+    };
 
     // ---------------- domini autorizzati ----------------
 
@@ -452,6 +493,22 @@ public sealed class MainForm : Form
         {
             try { _selectedDeviceSupportsDuplex = await _wia.SupportsDuplexAsync(info.DeviceId); }
             catch { _selectedDeviceSupportsDuplex = false; }
+
+            try
+            {
+                var caps = await _wia.GetCapabilitiesAsync(info.DeviceId);
+                ApplyCapabilities(caps);
+            }
+            catch (Exception ex)
+            {
+                ApplyCapabilities(null);
+                SetStatus(Severity.Warning, "Capacità scanner non lette",
+                    $"Uso i valori DPI/colore predefiniti: {ex.Message}");
+            }
+        }
+        else
+        {
+            ApplyCapabilities(null);
         }
         UpdateDuplexAvailability();
     }

@@ -27,6 +27,14 @@ public sealed class WiaScannerService
     private const int WIA_DATA_GRAYSCALE = 2;
     private const int WIA_DATA_COLOR = 3;
 
+    // --- Property.SubType (WIA Automation Layer) ---
+    private const int WIA_PROP_RANGE = 1;
+    private const int WIA_PROP_LIST = 2;
+
+    // DPI "standard" da usare quando il device espone XRES come range continuo
+    // (min/max/step) invece di un elenco discreto di valori supportati.
+    private static readonly int[] CommonDpiCandidates = { 75, 100, 150, 200, 300, 400, 600, 1200, 2400, 4800 };
+
     // --- DOCUMENT_HANDLING_SELECT / CAPABILITIES bit ---
     private const int FEEDER = 0x001;
     private const int FLATBED = 0x002;
@@ -86,6 +94,100 @@ public sealed class WiaScannerService
             catch { return false; }
             finally { Release(device); }
         });
+
+    /// <summary>
+    /// Legge dal device i DPI e le modalità colore effettivamente supportati
+    /// (proprietà <c>WIA_IPS_XRES</c> e <c>WIA_IPA_DATATYPE</c> dell'item), così
+    /// da poter popolare le combo della UI con valori realmente accettati dallo
+    /// scanner invece di un elenco fisso.
+    /// </summary>
+    public Task<ScannerCapabilities> GetCapabilitiesAsync(string deviceId)
+        => RunStaAsync(() =>
+        {
+            dynamic? device = null;
+            dynamic? item = null;
+            try
+            {
+                device = ConnectDevice(deviceId)
+                         ?? throw new InvalidOperationException("Scanner non trovato o non disponibile.");
+                item = device.Items[1];
+
+                List<int> dpis = ReadIntCapability(item.Properties, WIA_IPS_XRES);
+                List<int> rawColorValues = ReadIntCapability(item.Properties, WIA_IPA_DATATYPE);
+
+                var colorModes = rawColorValues
+                    .Select(ToColorMode)
+                    .Where(m => m.HasValue)
+                    .Select(m => m!.Value)
+                    .Distinct()
+                    .ToList();
+
+                return new ScannerCapabilities(dpis, colorModes);
+            }
+            finally
+            {
+                Release(item);
+                Release(device);
+            }
+        });
+
+    /// <summary>
+    /// Legge i valori interi ammessi per una proprietà WIA: elenco discreto per le
+    /// proprietà di tipo <c>WIA_PROP_LIST</c>, altrimenti (tipicamente
+    /// <c>WIA_PROP_RANGE</c>) i candidati "standard" compatibili con min/max/step
+    /// dichiarati dal device. In caso di proprietà non leggibile ritorna una lista
+    /// vuota: il chiamante deciderà il fallback.
+    /// </summary>
+    private static List<int> ReadIntCapability(dynamic properties, int propId)
+    {
+        var values = new List<int>();
+        try
+        {
+            dynamic prop = properties[propId];
+            int subType = (int)prop.SubType;
+
+            if (subType == WIA_PROP_LIST)
+            {
+                dynamic list = prop.SubTypeValues;
+                int count = list.Count;
+                for (int i = 1; i <= count; i++)
+                    values.Add((int)list[i]);
+            }
+            else if (subType == WIA_PROP_RANGE)
+            {
+                int min = (int)prop.SubTypeMin;
+                int max = (int)prop.SubTypeMax;
+                int step = (int)prop.SubTypeStep;
+                if (step <= 0) step = 1;
+
+                foreach (int candidate in CommonDpiCandidates)
+                {
+                    if (candidate < min || candidate > max) continue;
+                    if ((candidate - min) % step == 0) values.Add(candidate);
+                }
+
+                if (values.Count == 0) values.Add((int)prop.Value);
+            }
+            else
+            {
+                // WIA_PROP_NONE / WIA_PROP_FLAG: nessun elenco enumerabile, usa il valore corrente.
+                values.Add((int)prop.Value);
+            }
+        }
+        catch
+        {
+            // capability non leggibile: elenco vuoto, il chiamante userà un fallback
+        }
+        return values;
+    }
+
+    private static ColorMode? ToColorMode(int value) => value switch
+    {
+        WIA_DATA_COLOR => ColorMode.Color,
+        WIA_DATA_GRAYSCALE => ColorMode.Grayscale,
+        WIA_DATA_THRESHOLD => ColorMode.BlackWhite,
+        _ => null
+    };
 
     /// <summary>
     /// Acquisisce una o più pagine. Per ogni pagina invoca <paramref name="onPage"/>

@@ -6,6 +6,9 @@ public sealed record ScannerInfo(string DeviceId, string Name)
     public override string ToString() => Name;
 }
 
+/// <summary>Capacità dichiarate dal device per DPI e modalità colore (lette da WIA_IPS_XRES / WIA_IPA_DATATYPE).</summary>
+public sealed record ScannerCapabilities(IReadOnlyList<int> Dpis, IReadOnlyList<ColorMode> ColorModes);
+
 /// <summary>Modalita' colore di acquisizione (mappata sul WIA_IPA_DATATYPE).</summary>
 public enum ColorMode
 {
