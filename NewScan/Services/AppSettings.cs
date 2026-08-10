@@ -10,7 +10,7 @@ namespace NewScan.Services;
 /// </summary>
 public sealed class AppSettings
 {
-    public int Port { get; set; } = 8181;
+    public int Port { get; set; } = 8787;
 
     /// <summary>Origini extra ammesse oltre a quelle locali (es. "https://app.miosito.it").</summary>
     public List<string> AllowedOrigins { get; set; } = new();

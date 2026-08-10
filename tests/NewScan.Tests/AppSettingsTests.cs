@@ -11,7 +11,7 @@ public class AppSettingsTests
     {
         var s = new AppSettings();
 
-        Assert.Equal(8181, s.Port);
+        Assert.Equal(8787, s.Port);
         Assert.Equal(300, s.DefaultDpi);
         Assert.Equal(ColorMode.Color, s.DefaultColorMode);
         Assert.Empty(s.AllowedOrigins);

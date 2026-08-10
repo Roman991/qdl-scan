@@ -10,13 +10,13 @@ resta in background e comunica con la pagina web via **WebSocket**.
 ## Architettura
 
 ```
-Browser  ──WebSocket ws://127.0.0.1:8181──►  App desktop (WinUI 3)  ──WIA──►  Scanner
+Browser  ──WebSocket ws://127.0.0.1:8787──►  App desktop (WinUI 3)  ──WIA──►  Scanner
   │  "1100"  → richiesta scansione                 (NewScan.exe)
   │  ◄── Blob immagine (binario)
 ```
 
 1. L'app desktop parte minimizzata nella **system tray** e apre un server WebSocket
-   **solo su loopback** (`127.0.0.1:8181`).
+   **solo su loopback** (`127.0.0.1:8787`).
 2. La pagina web si collega. Se non riesce, mostra l'invito a installare l'app.
 3. Click su **Scan** nel browser → invia `"1100"`.
 4. L'app acquisisce via WIA e rispedisce l'immagine come **Blob** al browser, che ne fa
@@ -61,7 +61,7 @@ Pulsante per avviare la scansione e contenitore per le anteprime:
 Logica WebSocket essenziale (riconnessione + stato occupato/libero):
 
 ```javascript
-const BRIDGE_URL = 'ws://127.0.0.1:8181/';   // solo loopback
+const BRIDGE_URL = 'ws://127.0.0.1:8787/';   // solo loopback
 let ws = null;
 
 function connect() {
