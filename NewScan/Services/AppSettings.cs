@@ -13,7 +13,7 @@ public sealed class AppSettings
     public int Port { get; set; } = 8787;
 
     /// <summary>Origini extra ammesse oltre a quelle locali (es. "https://app.miosito.it").</summary>
-    public List<string> AllowedOrigins { get; set; } = new();
+    public List<string> AllowedOrigins { get; set; } = new() { "https://app.quellideilibri.it" };
 
     public int DefaultDpi { get; set; } = 300;
 

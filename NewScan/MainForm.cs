@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using NewScan.Models;
@@ -50,6 +51,10 @@ public sealed class MainForm : Form
     private CheckBox _duplexCheck = null!;
     private CheckBox _autostartCheck = null!;
     private Label _endpointLabel = null!;
+    private ListBox _originsList = null!;
+    private TextBox _originInput = null!;
+    private Button _addOriginButton = null!;
+    private Button _removeOriginButton = null!;
 
     public MainForm()
     {
@@ -63,6 +68,7 @@ public sealed class MainForm : Form
 
         ConfigureForm();
         PopulateStaticOptions();
+        PopulateOriginsList();
 
         _endpointLabel.Text = $"WebSocket in ascolto su ws://127.0.0.1:{_settings.Port} (solo locale).";
         _autostartCheck.Checked = AutostartService.IsEnabled();
@@ -240,6 +246,46 @@ public sealed class MainForm : Form
         advancedGroup.Controls.Add(advancedLayout);
         root.Controls.Add(advancedGroup);
 
+        // ---- domini autorizzati (Origin allowlist) ----
+        var originsGroup = new GroupBox
+        {
+            Text = "Domini autorizzati",
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12, 8, 12, 12),
+            Margin = new Padding(0, 16, 0, 0)
+        };
+        var originsLayout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, Dock = DockStyle.Top };
+        originsLayout.Controls.Add(new Label
+        {
+            Text = "Siti https:// da cui il bridge accetta connessioni (oltre a localhost, sempre ammesso).",
+            AutoSize = true,
+            MaximumSize = new Size(560, 0),
+            ForeColor = SystemColors.GrayText,
+            Margin = new Padding(0, 0, 0, 8)
+        });
+
+        _originsList = new ListBox { Dock = DockStyle.Top, Height = 90, Margin = new Padding(0, 0, 0, 8) };
+        originsLayout.Controls.Add(_originsList);
+
+        var originAddRow = new TableLayoutPanel { ColumnCount = 3, AutoSize = true, Dock = DockStyle.Top };
+        originAddRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        originAddRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        originAddRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _originInput = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 8, 0) };
+        _addOriginButton = new Button { Text = "Aggiungi", AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
+        _addOriginButton.Click += AddOriginButton_Click;
+        _removeOriginButton = new Button { Text = "Rimuovi selezionato", AutoSize = true };
+        _removeOriginButton.Click += RemoveOriginButton_Click;
+        originAddRow.Controls.Add(_originInput, 0, 0);
+        originAddRow.Controls.Add(_addOriginButton, 1, 0);
+        originAddRow.Controls.Add(_removeOriginButton, 2, 0);
+        originsLayout.Controls.Add(originAddRow);
+
+        originsGroup.Controls.Add(originsLayout);
+        root.Controls.Add(originsGroup);
+
         Controls.Add(root);
 
         // ---- tray icon ----
@@ -322,6 +368,53 @@ public sealed class MainForm : Form
         if ((_colorCombo.SelectedItem as ColorOption)?.Value is ColorMode mode)
             _settings.DefaultColorMode = mode;
         _settings.Save();
+    }
+
+    // ---------------- domini autorizzati ----------------
+
+    private void PopulateOriginsList()
+    {
+        _originsList.Items.Clear();
+        foreach (var origin in _settings.AllowedOrigins)
+            _originsList.Items.Add(origin);
+    }
+
+    private void AddOriginButton_Click(object? sender, EventArgs e)
+    {
+        var text = _originInput.Text.Trim();
+        if (text.Length == 0) return;
+
+        // Normalizza a "schema://host[:porta]", scartando path/query eventualmente incollati.
+        if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            SetStatus(Severity.Warning, "Dominio non valido",
+                "Inserisci un indirizzo completo, es. https://app.esempio.it");
+            return;
+        }
+
+        var origin = uri.GetLeftPart(UriPartial.Authority);
+        if (_settings.AllowedOrigins.Any(o => string.Equals(o, origin, StringComparison.OrdinalIgnoreCase)))
+        {
+            _originInput.Clear();
+            return;
+        }
+
+        _settings.AllowedOrigins.Add(origin);
+        _settings.Save();
+        _server.UpdateAllowedOrigins(_settings.AllowedOrigins);
+        PopulateOriginsList();
+        _originInput.Clear();
+    }
+
+    private void RemoveOriginButton_Click(object? sender, EventArgs e)
+    {
+        if (_originsList.SelectedItem is not string origin) return;
+
+        _settings.AllowedOrigins.RemoveAll(o => string.Equals(o, origin, StringComparison.OrdinalIgnoreCase));
+        _settings.Save();
+        _server.UpdateAllowedOrigins(_settings.AllowedOrigins);
+        PopulateOriginsList();
     }
 
     // ---------------- scanner ----------------

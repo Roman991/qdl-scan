@@ -22,7 +22,8 @@ public sealed class ScanBridgeServer : IDisposable
     private const string ReadyMessage = "READY";
 
     private readonly int _port;
-    private readonly HashSet<string> _allowedOrigins;
+    private readonly object _originGate = new();
+    private HashSet<string> _allowedOrigins;
     private readonly List<IWebSocketConnection> _sockets = new();
     private readonly object _gate = new();
     private WebSocketServer? _server;
@@ -50,6 +51,13 @@ public sealed class ScanBridgeServer : IDisposable
         get { lock (_gate) return _sockets.Count; }
     }
 
+    /// <summary>Sostituisce l'allowlist delle origini a caldo (es. dopo una modifica dalla GUI),
+    /// senza dover riavviare il bridge WebSocket.</summary>
+    public void UpdateAllowedOrigins(IEnumerable<string> allowedOrigins)
+    {
+        lock (_originGate) _allowedOrigins = new HashSet<string>(allowedOrigins, StringComparer.OrdinalIgnoreCase);
+    }
+
     public void Start()
     {
         FleckLog.Level = LogLevel.Warn;
@@ -62,7 +70,9 @@ public sealed class ScanBridgeServer : IDisposable
             socket.OnOpen = () =>
             {
                 var origin = socket.ConnectionInfo.Origin;
-                if (!OriginPolicy.IsAllowed(origin, _allowedOrigins))
+                HashSet<string> allowedOrigins;
+                lock (_originGate) allowedOrigins = _allowedOrigins;
+                if (!OriginPolicy.IsAllowed(origin, allowedOrigins))
                 {
                     socket.Close();
                     return;
