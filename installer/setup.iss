@@ -14,14 +14,17 @@
 #define AppVersion "2.0.0"
 #define AppPublisher "ScanAppForWeb"
 #define AppExe "NewScan.exe"
+#define AppId "{8F2A6C10-2D4B-4E2A-9C1F-7A1B2C3D4E5F}"
 ; Cartella di pubblicazione di 'dotnet publish' (aggiustare se necessario)
 #define PublishDir "..\NewScan\bin\Release\net48\publish"
 
 [Setup]
-AppId={{8F2A6C10-2D4B-4E2A-9C1F-7A1B2C3D4E5F}
+AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
+; Blocca install/uninstall se l'app e' in esecuzione (stesso mutex di NewScan/Program.cs)
+AppMutex=NewScan-ScanAppForWeb-SingleInstance-Mutex
 DefaultDirName={autopf}\ScanApp
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
@@ -53,3 +56,41 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 [Run]
 ; L'autostart NON viene forzato dall'installer: si gestisce dall'opzione in-app.
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Rimuove le impostazioni utente persistite (porta, allowlist, DPI) alla disinstallazione.
+Type: filesandordirs; Name: "{userappdata}\ScanApp"
+
+[Registry]
+; Registra la rimozione del valore di autostart alla disinstallazione, senza scriverlo
+; in fase di install (il toggle in-app resta l'unico punto che lo crea).
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "ScanApp"; Flags: uninsdeletevalue
+
+[Code]
+function InitializeSetup(): Boolean;
+var
+  UninstallString: String;
+  ResultCode: Integer;
+begin
+  Result := True;
+
+  // Se una versione precedente e' gia' installata (stesso AppId), disinstallala
+  // silenziosamente prima di copiare i nuovi file: rimuove anche eventuali file
+  // "orfani" di build precedenti con un publish output diverso (es. runtime WinUI3),
+  // perche' l'uninstaller di quella versione conosce esattamente cosa ha copiato lui.
+  if RegQueryStringValue(HKCU,
+       'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#AppId}_is1',
+       'UninstallString', UninstallString) then
+  begin
+    UninstallString := RemoveQuotes(Trim(UninstallString));
+    if FileExists(UninstallString) then
+      Exec(UninstallString, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '',
+           SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+
+  // Reset esplicito e idempotente (no-op se assenti): garantisce impostazioni pulite
+  // ad ogni install/upgrade anche per aggiornamenti provenienti da installer precedenti
+  // a questa fix, il cui uninstaller non conosce ancora [UninstallDelete]/[Registry].
+  DelTree(ExpandConstant('{userappdata}\ScanApp'), True, True, True);
+  RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'ScanApp');
+end;
