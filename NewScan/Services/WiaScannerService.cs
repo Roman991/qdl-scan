@@ -258,28 +258,40 @@ public sealed class WiaScannerService
     {
         var rejected = new List<string>();
 
-        // Origine / duplex (best effort: dipende dal device)
-        if (options.Source == PaperSource.Feeder)
+        // Molti scanner solo piano (senza ADF) non espongono affatto la proprietà
+        // WIA_DPS_DOCUMENT_HANDLING_SELECT: tentare comunque di impostarla la farebbe
+        // rifiutare ad ogni scansione. La si tocca solo se il device dichiara di
+        // supportare feeder e/o duplex tramite WIA_DPS_DOCUMENT_HANDLING_CAPABILITIES.
+        int handlingCaps = GetIntProperty(device.Properties, WIA_DPS_DOCUMENT_HANDLING_CAPABILITIES, 0);
+        if (handlingCaps != 0)
         {
-            int select = FEEDER | (options.Duplex ? DUPLEX : 0);
-            if (!TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, select))
-                rejected.Add("origine carta / duplex");
+            if (options.Source == PaperSource.Feeder)
+            {
+                int select = FEEDER | (options.Duplex ? DUPLEX : 0);
+                if (!TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, select, out string? err))
+                    rejected.Add($"origine carta / duplex ({err})");
+            }
+            else
+            {
+                if (!TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, FLATBED, out string? err))
+                    rejected.Add($"origine carta ({err})");
+            }
         }
-        else
+        else if (options.Source == PaperSource.Feeder)
         {
-            if (!TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, FLATBED))
-                rejected.Add("origine carta");
+            // L'utente ha chiesto l'alimentatore ma il device non ne dichiara nessuno.
+            rejected.Add("origine carta (alimentatore non disponibile su questo scanner)");
         }
 
         // La modalità colore va impostata PRIMA della risoluzione: su molti driver
         // il range valido di WIA_IPS_XRES/YRES dipende dal WIA_IPA_DATATYPE corrente,
         // quindi impostare prima il DPI può farlo silenziosamente rifiutare.
-        if (!TrySetProperty(item.Properties, WIA_IPA_DATATYPE, ToDataType(options.ColorMode)))
-            rejected.Add("modalità colore");
+        if (!TrySetProperty(item.Properties, WIA_IPA_DATATYPE, ToDataType(options.ColorMode), out string? colorErr))
+            rejected.Add($"modalità colore ({colorErr})");
 
-        bool xres = TrySetProperty(item.Properties, WIA_IPS_XRES, options.Dpi);
-        bool yres = TrySetProperty(item.Properties, WIA_IPS_YRES, options.Dpi);
-        if (!xres || !yres) rejected.Add("DPI");
+        bool xres = TrySetProperty(item.Properties, WIA_IPS_XRES, options.Dpi, out string? xErr);
+        bool yres = TrySetProperty(item.Properties, WIA_IPS_YRES, options.Dpi, out string? yErr);
+        if (!xres || !yres) rejected.Add($"DPI ({xErr ?? yErr})");
 
         return rejected;
     }
@@ -339,9 +351,23 @@ public sealed class WiaScannerService
     }
 
     private static bool TrySetProperty(dynamic properties, int propId, int value)
+        => TrySetProperty(properties, propId, value, out string? _);
+
+    private static bool TrySetProperty(dynamic properties, int propId, int value, out string? error)
     {
-        try { properties[propId].Value = value; return true; }
-        catch { return false; }
+        try
+        {
+            properties[propId].Value = value;
+            error = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex is COMException com
+                ? $"0x{com.HResult:X8}: {com.Message.Trim()}"
+                : ex.Message.Trim();
+            return false;
+        }
     }
 
     private static void Release(object? comObject)
