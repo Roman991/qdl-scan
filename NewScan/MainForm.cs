@@ -551,6 +551,7 @@ public sealed class MainForm : Form
         SetStatus(Severity.Info, "Scansione in corso", "Acquisizione dallo scanner…");
 
         int pageCount = 0;
+        IReadOnlyList<string> rejectedSettings = Array.Empty<string>();
         try
         {
             await _wia.ScanAsync(
@@ -561,12 +562,20 @@ public sealed class MainForm : Form
                     // Invio immediato al solo browser che ha richiesto la scansione (thread-safe).
                     _server.SendScanResult(bytes);
                 },
-                isCancelled: () => _cancelRequested);
+                isCancelled: () => _cancelRequested,
+                onSettingsRejected: rejected => rejectedSettings = rejected);
+
+            string rejectedSuffix = rejectedSettings.Count > 0
+                ? $" Attenzione: lo scanner ha rifiutato {string.Join(", ", rejectedSettings)} e ha usato i propri valori correnti."
+                : string.Empty;
 
             if (_cancelRequested)
-                SetStatus(Severity.Warning, "Interrotta", $"Scansione interrotta dopo {pageCount} pagina/e.");
+                SetStatus(Severity.Warning, "Interrotta", $"Scansione interrotta dopo {pageCount} pagina/e.{rejectedSuffix}");
             else if (pageCount == 0)
-                SetStatus(Severity.Warning, "Nessuna pagina", "Lo scanner non ha prodotto immagini.");
+                SetStatus(Severity.Warning, "Nessuna pagina", $"Lo scanner non ha prodotto immagini.{rejectedSuffix}");
+            else if (rejectedSettings.Count > 0)
+                SetStatus(Severity.Warning, "Completata con avvisi",
+                    $"{pageCount} pagina/e acquisita/e e inviata/e al browser.{rejectedSuffix}");
             else
                 SetStatus(Severity.Success, "Completata", $"{pageCount} pagina/e acquisita/e e inviata/e al browser.");
         }

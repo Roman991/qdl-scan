@@ -194,7 +194,8 @@ public sealed class WiaScannerService
     /// con i byte JPEG. In modalità alimentatore (ADF) prosegue finché ci sono fogli
     /// o finché <paramref name="isCancelled"/> ritorna true.
     /// </summary>
-    public Task ScanAsync(ScanOptions options, Action<byte[]> onPage, Func<bool> isCancelled)
+    public Task ScanAsync(ScanOptions options, Action<byte[]> onPage, Func<bool> isCancelled,
+        Action<IReadOnlyList<string>>? onSettingsRejected = null)
         => RunStaAsync<object?>(() =>
         {
             dynamic? device = null;
@@ -205,7 +206,8 @@ public sealed class WiaScannerService
                          ?? throw new InvalidOperationException("Scanner non trovato o non disponibile.");
                 item = device.Items[1];
 
-                ApplySettings(device, item, options);
+                var rejected = ApplySettings(device, item, options);
+                if (rejected.Count > 0) onSettingsRejected?.Invoke(rejected);
 
                 bool useFeeder = options.Source == PaperSource.Feeder;
                 do
@@ -247,22 +249,39 @@ public sealed class WiaScannerService
             return null;
         });
 
-    private void ApplySettings(dynamic device, dynamic item, ScanOptions options)
+    /// <summary>
+    /// Applica le opzioni di scansione al device WIA. Ritorna l'elenco (eventualmente
+    /// vuoto) delle impostazioni che il driver ha rifiutato, così il chiamante può
+    /// avvisare l'utente invece di scansionare in silenzio con i valori precedenti.
+    /// </summary>
+    private static List<string> ApplySettings(dynamic device, dynamic item, ScanOptions options)
     {
+        var rejected = new List<string>();
+
         // Origine / duplex (best effort: dipende dal device)
         if (options.Source == PaperSource.Feeder)
         {
             int select = FEEDER | (options.Duplex ? DUPLEX : 0);
-            TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, select);
+            if (!TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, select))
+                rejected.Add("origine carta / duplex");
         }
         else
         {
-            TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, FLATBED);
+            if (!TrySetProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT, FLATBED))
+                rejected.Add("origine carta");
         }
 
-        TrySetProperty(item.Properties, WIA_IPS_XRES, options.Dpi);
-        TrySetProperty(item.Properties, WIA_IPS_YRES, options.Dpi);
-        TrySetProperty(item.Properties, WIA_IPA_DATATYPE, ToDataType(options.ColorMode));
+        // La modalità colore va impostata PRIMA della risoluzione: su molti driver
+        // il range valido di WIA_IPS_XRES/YRES dipende dal WIA_IPA_DATATYPE corrente,
+        // quindi impostare prima il DPI può farlo silenziosamente rifiutare.
+        if (!TrySetProperty(item.Properties, WIA_IPA_DATATYPE, ToDataType(options.ColorMode)))
+            rejected.Add("modalità colore");
+
+        bool xres = TrySetProperty(item.Properties, WIA_IPS_XRES, options.Dpi);
+        bool yres = TrySetProperty(item.Properties, WIA_IPS_YRES, options.Dpi);
+        if (!xres || !yres) rejected.Add("DPI");
+
+        return rejected;
     }
 
     private static int ToDataType(ColorMode mode) => mode switch
@@ -319,10 +338,10 @@ public sealed class WiaScannerService
         catch { return fallback; }
     }
 
-    private static void TrySetProperty(dynamic properties, int propId, int value)
+    private static bool TrySetProperty(dynamic properties, int propId, int value)
     {
-        try { properties[propId].Value = value; }
-        catch { /* capability non supportata dal device: si ignora */ }
+        try { properties[propId].Value = value; return true; }
+        catch { return false; }
     }
 
     private static void Release(object? comObject)
