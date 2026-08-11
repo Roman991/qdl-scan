@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using NewScan.Models;
@@ -55,6 +56,7 @@ public sealed class MainForm : Form
     private TextBox _originInput = null!;
     private Button _addOriginButton = null!;
     private Button _removeOriginButton = null!;
+    private TextBox _versionLabel = null!;
 
     public MainForm()
     {
@@ -97,7 +99,7 @@ public sealed class MainForm : Form
     {
         SuspendLayout();
 
-        Text = "Scan App";
+        Text = $"Scan App — {GetVersionText()}";
         ClientSize = new Size(680, 760);
         MinimumSize = new Size(520, 560);
         StartPosition = FormStartPosition.CenterScreen;
@@ -286,6 +288,22 @@ public sealed class MainForm : Form
         originsGroup.Controls.Add(originsLayout);
         root.Controls.Add(originsGroup);
 
+        // ---- versione ----
+        // TextBox in sola lettura senza bordo invece di una Label: appare uguale ma il
+        // testo resta selezionabile/copiabile (utile per confrontare la build in test).
+        _versionLabel = new TextBox
+        {
+            Text = GetVersionText(),
+            ReadOnly = true,
+            BorderStyle = BorderStyle.None,
+            BackColor = SystemColors.Control,
+            ForeColor = SystemColors.GrayText,
+            Dock = DockStyle.Top,
+            TabStop = false,
+            Margin = new Padding(0, 12, 0, 0)
+        };
+        root.Controls.Add(_versionLabel);
+
         Controls.Add(root);
 
         // ---- tray icon ----
@@ -401,6 +419,20 @@ public sealed class MainForm : Form
         for (int i = 0; i < _colorCombo.Items.Count; i++)
             if ((_colorCombo.Items[i] as ColorOption)?.Value == mode) return i;
         return -1;
+    }
+
+    /// <summary>
+    /// "Versione X.Y.Z+build.NNN": il numero di build (github.run_number, iniettato in
+    /// CI con -p:BuildNumber) permette di verificare al volo se si sta testando l'ultima
+    /// build o una precedente, senza dover confrontare orari/commit a mano.
+    /// </summary>
+    private static string GetVersionText()
+    {
+        string version = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+            ?? "sconosciuta";
+        return $"Versione {version}";
     }
 
     private static string ColorModeLabel(ColorMode mode) => mode switch

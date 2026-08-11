@@ -286,12 +286,26 @@ public sealed class WiaScannerService
         // La modalità colore va impostata PRIMA della risoluzione: su molti driver
         // il range valido di WIA_IPS_XRES/YRES dipende dal WIA_IPA_DATATYPE corrente,
         // quindi impostare prima il DPI può farlo silenziosamente rifiutare.
-        if (!TrySetProperty(item.Properties, WIA_IPA_DATATYPE, ToDataType(options.ColorMode), out string? colorErr))
+        int wantedDataType = ToDataType(options.ColorMode);
+        bool colorOk = TrySetProperty(item.Properties, WIA_IPA_DATATYPE, wantedDataType,
+            out string? colorErr, out int appliedDataType);
+        if (!colorOk)
             rejected.Add($"modalità colore ({colorErr})");
+        else if (appliedDataType != wantedDataType)
+            rejected.Add(
+                $"modalità colore: '{options.ColorMode}' non supportata da questo scanner, " +
+                $"usata '{ToColorMode(appliedDataType)?.ToString() ?? appliedDataType.ToString()}'");
 
-        bool xres = TrySetProperty(item.Properties, WIA_IPS_XRES, options.Dpi, out string? xErr);
-        bool yres = TrySetProperty(item.Properties, WIA_IPS_YRES, options.Dpi, out string? yErr);
-        if (!xres || !yres) rejected.Add($"DPI ({xErr ?? yErr})");
+        // Applicare la Y con il valore effettivamente accettato per la X (invece di
+        // ricalcolarlo separatamente) evita che i due assi finiscano su risoluzioni
+        // diverse quando il driver arrotonda ciascuna proprietà in modo indipendente.
+        bool xres = TrySetProperty(item.Properties, WIA_IPS_XRES, options.Dpi, out string? xErr, out int appliedDpi);
+        string? yErr = null;
+        bool yres = xres && TrySetProperty(item.Properties, WIA_IPS_YRES, appliedDpi, out yErr, out int _);
+        if (!xres || !yres)
+            rejected.Add($"DPI ({xErr ?? yErr})");
+        else if (appliedDpi != options.Dpi)
+            rejected.Add($"DPI: {options.Dpi} non supportato da questo scanner, usato {appliedDpi}");
 
         return rejected;
     }
@@ -351,9 +365,86 @@ public sealed class WiaScannerService
     }
 
     private static bool TrySetProperty(dynamic properties, int propId, int value)
-        => TrySetProperty(properties, propId, value, out string? _);
+        => TrySetProperty(properties, propId, value, out string? _, out int _);
 
     private static bool TrySetProperty(dynamic properties, int propId, int value, out string? error)
+        => TrySetProperty(properties, propId, value, out error, out int _);
+
+    /// <summary>
+    /// WIA_IPA_DATATYPE e WIA_IPS_XRES/YRES sono documentate come VT_I4, ma molti
+    /// driver rifiutano comunque il valore richiesto (errore 0x8021006B, generico
+    /// dell'automation layer wiaaut.dll per "valore non tra quelli ammessi") quando
+    /// non combacia esattamente con la lista/range che il device dichiara in quel
+    /// momento — ad es. perché la UI è ricaduta su un elenco generico non validato
+    /// contro lo scanner reale. In quel caso si rilegge dal vivo l'elenco/range
+    /// effettivo e si riprova con il valore più vicino, invece di arrendersi.
+    /// </summary>
+    private static bool TrySetProperty(dynamic properties, int propId, int value, out string? error, out int appliedValue)
+    {
+        appliedValue = value;
+        if (TryAssign(properties, propId, value, out error))
+            return true;
+
+        if (TryFindClosestSupportedValue(properties, propId, value, out int closest) && closest != value &&
+            TryAssign(properties, propId, closest, out string? retryError))
+        {
+            appliedValue = closest;
+            error = null;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Rilegge SubType/SubTypeValues (o Min/Max/Step) e trova il valore ammesso più vicino a quello richiesto.</summary>
+    private static bool TryFindClosestSupportedValue(dynamic properties, int propId, int value, out int closest)
+    {
+        closest = value;
+        try
+        {
+            dynamic prop = properties[propId];
+            int subType = (int)prop.SubType;
+
+            if (subType == WIA_PROP_LIST)
+            {
+                dynamic list = prop.SubTypeValues;
+                int count = list.Count;
+                long bestDiff = long.MaxValue;
+                bool found = false;
+                for (int i = 1; i <= count; i++)
+                {
+                    int candidate = (int)list[i];
+                    long diff = Math.Abs((long)candidate - value);
+                    if (!found || diff < bestDiff)
+                    {
+                        bestDiff = diff;
+                        closest = candidate;
+                        found = true;
+                    }
+                }
+                return found;
+            }
+
+            if (subType == WIA_PROP_RANGE)
+            {
+                int min = (int)prop.SubTypeMin;
+                int max = (int)prop.SubTypeMax;
+                int step = (int)prop.SubTypeStep;
+                if (step <= 0) step = 1;
+
+                int clamped = Math.Max(min, Math.Min(max, value));
+                closest = min + (int)Math.Round((clamped - min) / (double)step) * step;
+                return true;
+            }
+        }
+        catch
+        {
+            // proprietà non rileggibile: nessun candidato, il chiamante manterrà l'errore originale
+        }
+        return false;
+    }
+
+    private static bool TryAssign(dynamic properties, int propId, object value, out string? error)
     {
         try
         {

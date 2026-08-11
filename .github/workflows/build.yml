@@ -24,13 +24,13 @@ jobs:
         run: dotnet restore NewScan.sln
 
       - name: Build
-        run: dotnet build NewScan.sln -c Release --no-restore
+        run: dotnet build NewScan.sln -c Release --no-restore -p:BuildNumber=${{ github.run_number }}
 
       - name: Test
         run: dotnet test NewScan.sln -c Release --no-build
 
       - name: Publish (.NET Framework 4.8, framework-dependent)
-        run: dotnet publish NewScan/NewScan.csproj -c Release
+        run: dotnet publish NewScan/NewScan.csproj -c Release -p:BuildNumber=${{ github.run_number }}
 
       - name: Upload publish output
         uses: actions/upload-artifact@v4
