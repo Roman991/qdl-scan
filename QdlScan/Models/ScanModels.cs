@@ -1,4 +1,4 @@
-namespace NewScan.Models;
+namespace QdlScan.Models;
 
 /// <summary>Scanner WIA individuato sul sistema.</summary>
 public sealed record ScannerInfo(string DeviceId, string Name)

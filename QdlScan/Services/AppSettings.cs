@@ -1,11 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NewScan.Models;
+using QdlScan.Models;
 
-namespace NewScan.Services;
+namespace QdlScan.Services;
 
 /// <summary>
-/// Impostazioni persistite in %AppData%\ScanApp\settings.json
+/// Impostazioni persistite in %AppData%\QdlScan\settings.json
 /// (sostituisce il vecchio Properties.Settings di WinForms).
 /// </summary>
 public sealed class AppSettings
@@ -23,7 +23,7 @@ public sealed class AppSettings
 
     [JsonIgnore]
     private static string SettingsDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ScanApp");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "QdlScan");
 
     [JsonIgnore]
     private static string SettingsPath => Path.Combine(SettingsDirectory, "settings.json");

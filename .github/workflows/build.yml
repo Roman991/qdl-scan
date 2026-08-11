@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  PUBLISH_DIR: NewScan/bin/Release/net48/publish
+  PUBLISH_DIR: QdlScan/bin/Release/net48/publish
 
 jobs:
   build:
@@ -21,16 +21,16 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore NewScan.sln
+        run: dotnet restore QdlScan.sln
 
       - name: Build
-        run: dotnet build NewScan.sln -c Release --no-restore -p:BuildNumber=${{ github.run_number }}
+        run: dotnet build QdlScan.sln -c Release --no-restore -p:BuildNumber=${{ github.run_number }}
 
       - name: Test
-        run: dotnet test NewScan.sln -c Release --no-build
+        run: dotnet test QdlScan.sln -c Release --no-build
 
       - name: Publish (.NET Framework 4.8, framework-dependent)
-        run: dotnet publish NewScan/NewScan.csproj -c Release -p:BuildNumber=${{ github.run_number }}
+        run: dotnet publish QdlScan/QdlScan.csproj -c Release -p:BuildNumber=${{ github.run_number }}
 
       - name: Upload publish output
         uses: actions/upload-artifact@v4
@@ -60,7 +60,7 @@ jobs:
         id: ver
         shell: pwsh
         run: |
-          [xml]$proj = Get-Content NewScan/NewScan.csproj
+          [xml]$proj = Get-Content QdlScan/QdlScan.csproj
           $v = ($proj.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
           if (-not $v) { $v = '0.0.0' }
           "version=$v" >> $env:GITHUB_OUTPUT
@@ -71,7 +71,7 @@ jobs:
         shell: pwsh
         run: choco install innosetup -y --no-progress
 
-      - name: Build installer (ScanAppSetup.exe)
+      - name: Build installer (QdlScanSetup.exe)
         shell: pwsh
         working-directory: installer
         run: |
@@ -79,22 +79,22 @@ jobs:
 
       - name: Package portable zip
         shell: pwsh
-        run: Compress-Archive -Path "${{ env.PUBLISH_DIR }}/*" -DestinationPath "ScanApp-portable-win-x64.zip" -Force
+        run: Compress-Archive -Path "${{ env.PUBLISH_DIR }}/*" -DestinationPath "QdlScan-portable-win-x64.zip" -Force
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: Scan App ${{ steps.ver.outputs.version }} (build ${{ github.run_number }})
+          name: Qdl Scan ${{ steps.ver.outputs.version }} (build ${{ github.run_number }})
           body: |
             Build automatica da `${{ github.sha }}`.
 
-            - `ScanAppSetup.exe` — installer (framework-dependent).
-            - `ScanApp-portable-win-x64.zip` — versione portable (scompatta ed esegui `NewScan.exe`).
+            - `QdlScanSetup.exe` — installer (framework-dependent).
+            - `QdlScan-portable-win-x64.zip` — versione portable (scompatta ed esegui `QdlScan.exe`).
 
             **Prerequisito** (già presente su quasi tutti i PC Windows 10/11):
             - .NET Framework 4.8 — se mancante, [scaricalo qui](https://dotnet.microsoft.com/download/dotnet-framework/net48)
           files: |
-            installer/Output/ScanAppSetup.exe
-            ScanApp-portable-win-x64.zip
+            installer/Output/QdlScanSetup.exe
+            QdlScan-portable-win-x64.zip
           fail_on_unmatched_files: true

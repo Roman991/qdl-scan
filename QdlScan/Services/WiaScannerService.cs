@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Threading;
-using NewScan.Models;
+using QdlScan.Models;
 
-namespace NewScan.Services;
+namespace QdlScan.Services;
 
 /// <summary>
 /// Acquisizione documenti tramite WIA (Windows Image Acquisition), in sostituzione
@@ -143,7 +143,7 @@ public sealed class WiaScannerService
         var values = new List<int>();
         try
         {
-            dynamic prop = properties[propId];
+            dynamic prop = GetProperty(properties, propId);
             int subType = (int)prop.SubType;
 
             if (subType == WIA_PROP_LIST)
@@ -307,7 +307,43 @@ public sealed class WiaScannerService
         else if (appliedDpi != options.Dpi)
             rejected.Add($"DPI: {options.Dpi} non supportato da questo scanner, usato {appliedDpi}");
 
+        if (rejected.Count > 0)
+            WriteDiagnosticsLog(options, device, item, rejected);
+
         return rejected;
+    }
+
+    /// <summary>
+    /// Quando il driver rifiuta un'impostazione, salva un dump delle proprietà chiave
+    /// (SubType, VarType, elenco/range ammesso) in %AppData%\QdlScan\wia-diagnostics.log,
+    /// sovrascrivendo il precedente. Serve a capire cosa dichiara davvero lo scanner
+    /// senza dover avere l'hardware sotto mano: se anche la rilettura fallisce, lo si
+    /// vede subito dal messaggio "lettura proprietà fallita" invece che dal solo 0x8021006B.
+    /// </summary>
+    private static void WriteDiagnosticsLog(ScanOptions options, dynamic device, dynamic item, List<string> rejected)
+    {
+        try
+        {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "QdlScan");
+            Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, "wia-diagnostics.log");
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"--- {DateTime.Now:yyyy-MM-dd HH:mm:ss} ---");
+            sb.AppendLine($"Device: {options.DeviceId}");
+            sb.AppendLine($"Richiesto: DPI={options.Dpi} Colore={options.ColorMode} Origine={options.Source} Duplex={options.Duplex}");
+            sb.AppendLine($"Rifiutato: {string.Join(" | ", rejected)}");
+            sb.AppendLine($"WIA_IPA_DATATYPE: {DescribeProperty(item.Properties, WIA_IPA_DATATYPE)}");
+            sb.AppendLine($"WIA_IPS_XRES: {DescribeProperty(item.Properties, WIA_IPS_XRES)}");
+            sb.AppendLine($"WIA_IPS_YRES: {DescribeProperty(item.Properties, WIA_IPS_YRES)}");
+            sb.AppendLine($"WIA_IPS_DOCUMENT_HANDLING_SELECT: {DescribeProperty(device.Properties, WIA_IPS_DOCUMENT_HANDLING_SELECT)}");
+
+            File.WriteAllText(path, sb.ToString());
+        }
+        catch
+        {
+            // diagnostica best-effort: non deve mai far fallire la scansione
+        }
     }
 
     private static int ToDataType(ColorMode mode) => mode switch
@@ -360,9 +396,21 @@ public sealed class WiaScannerService
 
     private static int GetIntProperty(dynamic properties, int propId, int fallback)
     {
-        try { return (int)properties[propId].Value; }
+        try { return (int)GetProperty(properties, propId).Value; }
         catch { return fallback; }
     }
+
+    /// <summary>
+    /// L'indicizzatore <c>Properties.Item</c> del layer di automazione WIA (wiaaut.dll)
+    /// accetta un Variant che viene risolto SOLO per posizione (1-based) o per nome
+    /// (stringa) — mai per PROPID numerico. Passare un <c>int</c> come 4103 lo fa
+    /// interpretare come "posizione 4103 nella collection", inevitabilmente fuori
+    /// range (errore 0x8021006B, "indice non compreso nell'intervallo consentito") per
+    /// qualsiasi driver: il PROPID va quindi passato come stringa, dato che i driver
+    /// pubblicano il nome della proprietà come rappresentazione decimale del suo ID.
+    /// </summary>
+    private static dynamic GetProperty(dynamic properties, int propId)
+        => properties[propId.ToString(System.Globalization.CultureInfo.InvariantCulture)];
 
     private static bool TrySetProperty(dynamic properties, int propId, int value)
         => TrySetProperty(properties, propId, value, out string? _, out int _);
@@ -393,7 +441,60 @@ public sealed class WiaScannerService
             return true;
         }
 
+        error = $"{error} [{DescribeProperty(properties, propId)}]";
         return false;
+    }
+
+    /// <summary>
+    /// Dump diagnostico di una proprietà (SubType/VarType + elenco valori o range).
+    /// Non lancia mai: se la rilettura stessa fallisce, riporta quell'errore — utile per
+    /// distinguere "valore non in lista" da "il device non espone affatto questo propId".
+    /// </summary>
+    private static string DescribeProperty(dynamic properties, int propId)
+    {
+        try
+        {
+            dynamic prop = GetProperty(properties, propId);
+            int subType = (int)prop.SubType;
+            string subTypeName = subType switch
+            {
+                0 => "NONE",
+                WIA_PROP_RANGE => "RANGE",
+                WIA_PROP_LIST => "LIST",
+                4 => "FLAG",
+                _ => subType.ToString()
+            };
+            string varType;
+            try { varType = ((VarEnum)(int)prop.Type).ToString(); }
+            catch { varType = "?"; }
+
+            if (subType == WIA_PROP_LIST)
+            {
+                dynamic list = prop.SubTypeValues;
+                int count = list.Count;
+                var vals = new List<string>();
+                for (int i = 1; i <= count; i++)
+                {
+                    try { vals.Add(Convert.ToString(list[i]) ?? "?"); }
+                    catch { vals.Add("?"); }
+                }
+                return $"propId={propId} subType={subTypeName} varType={varType} values=[{string.Join(",", vals)}]";
+            }
+            if (subType == WIA_PROP_RANGE)
+            {
+                return $"propId={propId} subType={subTypeName} varType={varType} " +
+                       $"min={prop.SubTypeMin} max={prop.SubTypeMax} step={prop.SubTypeStep}";
+            }
+
+            object? current = null;
+            try { current = prop.Value; } catch { /* best effort */ }
+            return $"propId={propId} subType={subTypeName} varType={varType} current={current}";
+        }
+        catch (Exception ex)
+        {
+            string detail = ex is COMException com ? $"0x{com.HResult:X8}: {com.Message.Trim()}" : ex.Message.Trim();
+            return $"propId={propId} lettura proprietà fallita: {detail}";
+        }
     }
 
     /// <summary>Rilegge SubType/SubTypeValues (o Min/Max/Step) e trova il valore ammesso più vicino a quello richiesto.</summary>
@@ -402,7 +503,7 @@ public sealed class WiaScannerService
         closest = value;
         try
         {
-            dynamic prop = properties[propId];
+            dynamic prop = GetProperty(properties, propId);
             int subType = (int)prop.SubType;
 
             if (subType == WIA_PROP_LIST)
@@ -448,7 +549,7 @@ public sealed class WiaScannerService
     {
         try
         {
-            properties[propId].Value = value;
+            GetProperty(properties, propId).Value = value;
             error = null;
             return true;
         }

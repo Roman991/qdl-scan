@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net48</TargetFramework>
-    <RootNamespace>NewScan</RootNamespace>
-    <AssemblyName>NewScan</AssemblyName>
+    <RootNamespace>QdlScan</RootNamespace>
+    <AssemblyName>QdlScan</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
@@ -16,8 +16,8 @@
          (a differenza della precedente build WinUI 3 / .NET 10 + Windows App SDK). -->
 
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <AssemblyTitle>Scan App</AssemblyTitle>
-    <Product>ScanAppForWeb</Product>
+    <AssemblyTitle>Qdl Scan</AssemblyTitle>
+    <Product>Qdl Scan</Product>
     <Version>2.0.0</Version>
 
     <!-- Numero di build CI (github.run_number), passato con -p:BuildNumber=NNN in build.yml.

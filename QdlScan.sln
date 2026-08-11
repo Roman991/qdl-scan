@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NewScan", "NewScan\NewScan.csproj", "{10A4AF7D-B37C-4244-A4E8-4DE7495E51EE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QdlScan", "QdlScan\QdlScan.csproj", "{10A4AF7D-B37C-4244-A4E8-4DE7495E51EE}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NewScan.Tests", "tests\NewScan.Tests\NewScan.Tests.csproj", "{B7E4C9A2-1F3D-4A8E-9C2B-5D6E7F8A9B0C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "QdlScan.Tests", "tests\QdlScan.Tests\QdlScan.Tests.csproj", "{B7E4C9A2-1F3D-4A8E-9C2B-5D6E7F8A9B0C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

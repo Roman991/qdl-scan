@@ -1,4 +1,4 @@
-namespace NewScan.Services;
+namespace QdlScan.Services;
 
 /// <summary>
 /// Politica di accettazione dell'header <c>Origin</c> per il bridge WebSocket, estratta in

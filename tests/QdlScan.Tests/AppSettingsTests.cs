@@ -1,8 +1,8 @@
-using NewScan.Models;
-using NewScan.Services;
+using QdlScan.Models;
+using QdlScan.Services;
 using Xunit;
 
-namespace NewScan.Tests;
+namespace QdlScan.Tests;
 
 public class AppSettingsTests
 {

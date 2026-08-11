@@ -6,10 +6,10 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using NewScan.Models;
-using NewScan.Services;
+using QdlScan.Models;
+using QdlScan.Services;
 
-namespace NewScan;
+namespace QdlScan;
 
 /// <summary>
 /// Finestra principale (WinForms, grafica di default di Windows — sostituisce la
@@ -99,7 +99,7 @@ public sealed class MainForm : Form
     {
         SuspendLayout();
 
-        Text = $"Scan App — {GetVersionText()}";
+        Text = $"Qdl Scan — {GetVersionText()}";
         ClientSize = new Size(680, 760);
         MinimumSize = new Size(520, 560);
         StartPosition = FormStartPosition.CenterScreen;
@@ -173,7 +173,10 @@ public sealed class MainForm : Form
         scannerColumn.Controls.Add(new Label { Text = "Scanner", AutoSize = true, Font = new Font(Font, FontStyle.Bold) });
         _scannerCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, Width = 300 };
         _scannerCombo.DisplayMember = null!;
-        _scannerCombo.SelectionChangeCommitted += ScannerCombo_SelectionChanged;
+        // SelectedIndexChanged (non SelectionChangeCommitted!) perché le capacità del
+        // device vanno ricaricate anche quando la selezione è impostata da codice
+        // (avvio, click "Aggiorna"), non solo quando l'utente sceglie dal dropdown.
+        _scannerCombo.SelectedIndexChanged += ScannerCombo_SelectionChanged;
         scannerColumn.Controls.Add(_scannerCombo);
         _refreshButton = new Button { Text = "Aggiorna", AutoSize = true, Anchor = AnchorStyles.Bottom, Margin = new Padding(10, 0, 0, 0) };
         _refreshButton.Click += RefreshScanners_Click;
@@ -320,7 +323,7 @@ public sealed class MainForm : Form
         _trayIcon = new NotifyIcon
         {
             Icon = Icon,
-            Text = "Scan App — bridge scanner per il browser",
+            Text = "Qdl Scan — bridge scanner per il browser",
             ContextMenuStrip = trayMenu,
             Visible = true
         };
@@ -598,7 +601,8 @@ public sealed class MainForm : Form
                 onSettingsRejected: rejected => rejectedSettings = rejected);
 
             string rejectedSuffix = rejectedSettings.Count > 0
-                ? $" Attenzione: lo scanner ha rifiutato {string.Join(", ", rejectedSettings)} e ha usato i propri valori correnti."
+                ? $" Attenzione: lo scanner ha rifiutato {string.Join(", ", rejectedSettings)} e ha usato i propri valori correnti. " +
+                  "Dettagli in %AppData%\\QdlScan\\wia-diagnostics.log."
                 : string.Empty;
 
             if (_cancelRequested)

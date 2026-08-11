@@ -1,6 +1,6 @@
 using Microsoft.Win32;
 
-namespace NewScan.Services;
+namespace QdlScan.Services;
 
 /// <summary>
 /// Avvio automatico all'accesso a Windows, ora <b>opt-in</b>.
@@ -12,7 +12,7 @@ namespace NewScan.Services;
 public static class AutostartService
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string ValueName = "ScanApp";
+    private const string ValueName = "QdlScan";
 
     public static bool IsEnabled()
     {

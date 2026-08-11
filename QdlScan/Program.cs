@@ -2,11 +2,11 @@ using System;
 using System.Threading;
 using System.Windows.Forms;
 
-namespace NewScan;
+namespace QdlScan;
 
 internal static class Program
 {
-    private const string MutexName = "NewScan-ScanAppForWeb-SingleInstance-Mutex";
+    private const string MutexName = "QdlScan-SingleInstance-Mutex";
 
     [STAThread]
     private static void Main()
@@ -16,8 +16,8 @@ internal static class Program
         if (!createdNew)
         {
             MessageBox.Show(
-                "Scan App è già in esecuzione.",
-                "Scan App",
+                "Qdl Scan è già in esecuzione.",
+                "Qdl Scan",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
             return;

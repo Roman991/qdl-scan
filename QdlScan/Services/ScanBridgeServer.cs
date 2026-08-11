@@ -1,6 +1,6 @@
 using Fleck;
 
-namespace NewScan.Services;
+namespace QdlScan.Services;
 
 /// <summary>
 /// Ponte WebSocket fra il browser e l'app di scansione.

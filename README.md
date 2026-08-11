@@ -1,17 +1,17 @@
-# ScanAppForWeb
+# Qdl Scan
 
 Acquisisci documenti da uno **scanner fisico direttamente dal browser**. Poiché
 JavaScript non può accedere all'hardware, una piccola app desktop fa da "ponte":
 resta in background e comunica con la pagina web via **WebSocket**.
 
-> **Versione 2.0** — l'app desktop è stata riscritta in **WinUI 3 / .NET 10** e usa
+> **Versione 2.0** — l'app desktop usa **WinForms / .NET Framework 4.8** e
 > **WIA (Windows Image Acquisition)** al posto di TWAIN. Vedi sotto le note di migrazione.
 
 ## Architettura
 
 ```
-Browser  ──WebSocket ws://127.0.0.1:8787──►  App desktop (WinUI 3)  ──WIA──►  Scanner
-  │  "1100"  → richiesta scansione                 (NewScan.exe)
+Browser  ──WebSocket ws://127.0.0.1:8787──►  App desktop (WinForms)  ──WIA──►  Scanner
+  │  "1100"  → richiesta scansione                 (QdlScan.exe)
   │  ◄── Blob immagine (binario)
 ```
 
@@ -26,27 +26,25 @@ Browser  ──WebSocket ws://127.0.0.1:8787──►  App desktop (WinUI 3)  �
 
 | Percorso | Ruolo | Stack |
 |----------|-------|-------|
-| `NewScan/` | App desktop "ponte" | C# **.NET 10**, **WinUI 3**, Fleck (WebSocket), WIA |
+| `QdlScan/` | App desktop "ponte" | C# **.NET Framework 4.8**, **WinForms**, Fleck (WebSocket), WIA |
 | `example.html` | Esempio client puro (anteprima + rotazione) | HTML + JS |
-| `installer/` | Script **Inno Setup** per generare `ScanAppSetup.exe` | Inno Setup |
+| `installer/` | Script **Inno Setup** per generare `QdlScanSetup.exe` | Inno Setup |
 
 ## Build dell'app desktop
 
-Requisiti: **.NET 10 SDK** (con WindowsAppSDK 2.2 via NuGet).
+Requisiti: **.NET 8 SDK** (o superiore; compila il progetto `net48` tramite il targeting pack .NET Framework 4.8, come in CI).
 
 ```sh
-# Pubblicazione self-contained (nessun prerequisito runtime per l'utente).
-# In self-contained WinUI il platform deve essere esplicito (x64), non AnyCPU.
-dotnet publish NewScan/NewScan.csproj -c Release -r win-x64 --self-contained -p:Platform=x64
+dotnet publish QdlScan/QdlScan.csproj -c Release
 ```
 
-Output: `NewScan/bin/x64/Release/net10.0-windows10.0.19041.0/win-x64/publish/`.
+Output: `QdlScan/bin/Release/net48/publish/`.
 
 Per generare l'installer (richiede [Inno Setup](https://jrsoftware.org/isinfo.php)):
 
 ```sh
 cd installer
-ISCC setup.iss        # produce installer/Output/ScanAppSetup.exe
+ISCC setup.iss        # produce installer/Output/QdlScanSetup.exe
 ```
 
 ## Integrazione in una pagina web
@@ -116,12 +114,12 @@ stesso comportamento serve ai contesti `file://`. Essendo l'ascolto su loopback,
 limitata a software già in esecuzione localmente. Per scenari più sensibili valutare un token
 condiviso nell'handshake.
 
-Allowlist e porta sono configurabili in `%AppData%\ScanApp\settings.json` (il file viene
+Allowlist e porta sono configurabili in `%AppData%\QdlScan\settings.json` (il file viene
 creato ai valori predefiniti al primo avvio).
 
 ## Note di migrazione (v1 → v2)
 
 - **TWAIN/NTwain → WIA**: il duplex/ADF dipende dal driver WIA del dispositivo. Dove non
   supportato, l'opzione fronte/retro è disabilitata e si acquisisce in singola pagina.
-- **WinForms/.NET 4.5.2 → WinUI 3/.NET 10** (WindowsAppSDK 2.2).
-- **Setup `.vdproj`/MSI → Inno Setup** (`ScanAppSetup.exe`), output self-contained.
+- **WinForms/.NET 4.5.2 → WinForms/.NET Framework 4.8**.
+- **Setup `.vdproj`/MSI → Inno Setup** (`QdlScanSetup.exe`), output framework-dependent.

@@ -1,8 +1,8 @@
-; Inno Setup script per Scan App (WinForms, .NET Framework 4.8).
+; Inno Setup script per Qdl Scan (WinForms, .NET Framework 4.8).
 ; Sostituisce il vecchio progetto Visual Studio Setup (.vdproj / Scan_App_SetUp.msi).
 ;
 ; Build dell'app prima di compilare questo script:
-;   dotnet publish ../NewScan/NewScan.csproj -c Release
+;   dotnet publish ../QdlScan/QdlScan.csproj -c Release
 ; Poi compilare con Inno Setup (ISCC):
 ;   ISCC setup.iss
 ;
@@ -10,32 +10,34 @@
 ; (o distribuito via Windows Update) — nessun runtime aggiuntivo da installare a parte,
 ; a differenza della precedente build WinUI 3 / .NET 10 + Windows App SDK.
 
-#define AppName "Scan App"
+#define AppName "Qdl Scan"
 #define AppVersion "2.0.0"
-#define AppPublisher "ScanAppForWeb"
-#define AppExe "NewScan.exe"
+#define AppPublisher "Qdl Scan"
+#define AppExe "QdlScan.exe"
+; NON cambiare: identifica l'app per l'upgrade/uninstall automatico delle installazioni
+; precedenti (vedi [Code] sotto), a prescindere dal nome con cui furono pubblicate.
 #define AppId "{8F2A6C10-2D4B-4E2A-9C1F-7A1B2C3D4E5F}"
 ; Cartella di pubblicazione di 'dotnet publish' (aggiustare se necessario)
-#define PublishDir "..\NewScan\bin\Release\net48\publish"
+#define PublishDir "..\QdlScan\bin\Release\net48\publish"
 
 [Setup]
 AppId={{#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-; Blocca install/uninstall se l'app e' in esecuzione (stesso mutex di NewScan/Program.cs)
-AppMutex=NewScan-ScanAppForWeb-SingleInstance-Mutex
-DefaultDirName={autopf}\ScanApp
+; Blocca install/uninstall se l'app e' in esecuzione (stesso mutex di QdlScan/Program.cs)
+AppMutex=QdlScan-SingleInstance-Mutex
+DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 OutputDir=Output
-OutputBaseFilename=ScanAppSetup
+OutputBaseFilename=QdlScanSetup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
-SetupIconFile=..\NewScan\Assets\app.ico
+SetupIconFile=..\QdlScan\Assets\app.ico
 UninstallDisplayIcon={app}\{#AppExe}
 
 [Languages]
@@ -59,12 +61,12 @@ Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags
 
 [UninstallDelete]
 ; Rimuove le impostazioni utente persistite (porta, allowlist, DPI) alla disinstallazione.
-Type: filesandordirs; Name: "{userappdata}\ScanApp"
+Type: filesandordirs; Name: "{userappdata}\QdlScan"
 
 [Registry]
 ; Registra la rimozione del valore di autostart alla disinstallazione, senza scriverlo
 ; in fase di install (il toggle in-app resta l'unico punto che lo crea).
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "ScanApp"; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "QdlScan"; Flags: uninsdeletevalue
 
 [Code]
 function InitializeSetup(): Boolean;
@@ -91,6 +93,12 @@ begin
   // Reset esplicito e idempotente (no-op se assenti): garantisce impostazioni pulite
   // ad ogni install/upgrade anche per aggiornamenti provenienti da installer precedenti
   // a questa fix, il cui uninstaller non conosce ancora [UninstallDelete]/[Registry].
+  DelTree(ExpandConstant('{userappdata}\QdlScan'), True, True, True);
+  RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'QdlScan');
+
+  // Residui della vecchia app "Scan App" (nome precedente al rebranding): l'uninstaller
+  // silenzioso sopra li rimuove già se l'installazione precedente aveva questa stessa
+  // fix, ma non per installazioni ancora più vecchie il cui uninstaller non la conosceva.
   DelTree(ExpandConstant('{userappdata}\ScanApp'), True, True, True);
   RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'ScanApp');
 end;

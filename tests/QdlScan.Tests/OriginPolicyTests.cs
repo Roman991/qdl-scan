@@ -1,7 +1,7 @@
-using NewScan.Services;
+using QdlScan.Services;
 using Xunit;
 
-namespace NewScan.Tests;
+namespace QdlScan.Tests;
 
 public class OriginPolicyTests
 {
