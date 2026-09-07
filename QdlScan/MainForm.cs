@@ -370,12 +370,18 @@ public sealed class MainForm : Form
             new SourceOption(PaperSource.Flatbed, "Piano fisso"),
             new SourceOption(PaperSource.Feeder, "Alimentatore (ADF)")
         });
-        _sourceCombo.SelectedIndex = 0;
+        int sourceIndex = _sourceCombo.Items.Cast<SourceOption>()
+            .ToList().FindIndex(o => o.Value == _settings.DefaultSource);
+        _sourceCombo.SelectedIndex = sourceIndex >= 0 ? sourceIndex : 0;
 
-        // Da qui in poi le scelte dell'utente su DPI/colore vengono memorizzate.
+        _duplexCheck.Checked = _settings.DefaultDuplex;
+
+        // Da qui in poi le scelte dell'utente su DPI/colore/origine/duplex vengono memorizzate.
         _optionsReady = true;
         _dpiCombo.SelectionChangeCommitted += (_, _) => PersistDefaults();
         _colorCombo.SelectionChangeCommitted += (_, _) => PersistDefaults();
+        _sourceCombo.SelectionChangeCommitted += (_, _) => PersistDefaults();
+        _duplexCheck.CheckedChanged += (_, _) => PersistDefaults();
     }
 
     /// <summary>Memorizza DPI e modalità colore correnti come default per i prossimi avvii.</summary>
@@ -507,7 +513,12 @@ public sealed class MainForm : Form
             _scanners.ResetBindings();
 
             if (_scanners.Count > 0)
-                _scannerCombo.SelectedIndex = 0;
+            {
+                int savedIndex = string.IsNullOrEmpty(_settings.DefaultDeviceId)
+                    ? -1
+                    : _scanners.ToList().FindIndex(s => s.DeviceId == _settings.DefaultDeviceId);
+                _scannerCombo.SelectedIndex = savedIndex >= 0 ? savedIndex : 0;
+            }
             else
                 SetStatus(Severity.Warning, "Nessuno scanner",
                     "Nessuno scanner WIA rilevato. Collega un dispositivo e premi Aggiorna.");
@@ -526,6 +537,12 @@ public sealed class MainForm : Form
         _selectedDeviceSupportsDuplex = false;
         if (_scannerCombo.SelectedItem is ScannerInfo info)
         {
+            if (_optionsReady && _settings.DefaultDeviceId != info.DeviceId)
+            {
+                _settings.DefaultDeviceId = info.DeviceId;
+                _settings.Save();
+            }
+
             try { _selectedDeviceSupportsDuplex = await _wia.SupportsDuplexAsync(info.DeviceId); }
             catch { _selectedDeviceSupportsDuplex = false; }
 

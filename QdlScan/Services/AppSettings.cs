@@ -19,6 +19,13 @@ public sealed class AppSettings
 
     public ColorMode DefaultColorMode { get; set; } = ColorMode.Color;
 
+    /// <summary>DeviceId WIA dell'ultimo scanner selezionato, per riselezionarlo al riavvio.</summary>
+    public string? DefaultDeviceId { get; set; }
+
+    public PaperSource DefaultSource { get; set; } = PaperSource.Flatbed;
+
+    public bool DefaultDuplex { get; set; }
+
     // --- persistenza ---
 
     [JsonIgnore]

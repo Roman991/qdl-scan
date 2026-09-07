@@ -14,6 +14,9 @@ public class AppSettingsTests
         Assert.Equal(8787, s.Port);
         Assert.Equal(300, s.DefaultDpi);
         Assert.Equal(ColorMode.Color, s.DefaultColorMode);
+        Assert.Null(s.DefaultDeviceId);
+        Assert.Equal(PaperSource.Flatbed, s.DefaultSource);
+        Assert.False(s.DefaultDuplex);
         Assert.Equal(new[] { "https://app.quellideilibri.it" }, s.AllowedOrigins);
     }
 }
